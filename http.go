@@ -240,21 +240,21 @@ func mergeHttpConfig(c *HttpConfig) *HttpConfig {
 }
 
 func SetupHttp(hc *HttpConfig) {
-	defaultProxyFlushInterval = hc.ProxyFlushInterval
 	defaultConfig := mergeHttpConfig(hc)
+	defaultProxyFlushInterval = defaultConfig.ProxyFlushInterval
 	DefaultHttpTransport = &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
 		DialContext: (&net.Dialer{
 			Timeout:   defaultConfig.ConnectTimeout,
 			KeepAlive: defaultConfig.KeepAlive,
 		}).DialContext,
-		ForceAttemptHTTP2:      IfBool(hc.ForceAttemptHTTP2Set || hc.ForceAttemptHTTP2, hc.ForceAttemptHTTP2, true),
+		ForceAttemptHTTP2:      IfBool(defaultConfig.ForceAttemptHTTP2Set || defaultConfig.ForceAttemptHTTP2, defaultConfig.ForceAttemptHTTP2, true),
 		MaxIdleConns:           defaultConfig.MaxIdleConns,
 		MaxIdleConnsPerHost:    defaultConfig.MaxIdleConnsPerHost,
 		MaxConnsPerHost:        defaultConfig.MaxConnsPerHost,
 		IdleConnTimeout:        defaultConfig.IdleConnTimeout,
 		TLSHandshakeTimeout:    defaultConfig.TLSHandshakeTimeout,
-		DisableCompression:     IfBool(hc.DisableCompressionSet || hc.DisableCompression, hc.DisableCompression, false),
+		DisableCompression:     IfBool(defaultConfig.DisableCompressionSet || defaultConfig.DisableCompression, defaultConfig.DisableCompression, false),
 		ResponseHeaderTimeout:  defaultConfig.ResponseHeaderTimeout,
 		ExpectContinueTimeout:  defaultConfig.ExpectContinueTimeout,
 		MaxResponseHeaderBytes: defaultConfig.MaxResponseHeaderBytes,
@@ -386,7 +386,8 @@ func HttpRequest(method string, url string, header map[string]string, body io.Re
 func HttpJson(method string, url string, header map[string]string, reqobj interface{}, rspobj interface{}) (status int, err error) {
 	var body io.Reader
 	if reqobj != nil {
-		data, err := json.Marshal(reqobj)
+		var data []byte
+		data, err = json.Marshal(reqobj)
 		if err != nil {
 			return
 		}
