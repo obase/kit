@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"sync"
 	"time"
 )
 
@@ -265,6 +266,7 @@ func SetupHttp(hc *HttpConfig) {
 		Transport: DefaultHttpTransport,
 		Timeout:   defaultConfig.RequestTimeout,
 	}
+
 	DefaultReverseProxy = &httputil.ReverseProxy{
 		Transport:     DefaultHttpTransport,
 		FlushInterval: defaultConfig.ProxyFlushInterval,
@@ -280,6 +282,17 @@ func SetupHttp(hc *HttpConfig) {
 		BufferPool:   proxyBufferPool(defaultConfig.ProxyBufferPool),
 		ErrorHandler: proxyErrorHandler(defaultConfig.ProxyErrorHandler),
 	}
+}
+
+type httpBufferPool struct {
+	Proxy *sync.Pool
+}
+
+func (s *httpBufferPool) Get() []byte {
+	return s.Proxy.Get().([]byte)
+}
+func (s *httpBufferPool) Put(v []byte) {
+	s.Proxy.Put(v)
 }
 
 func proxyBufferPool(name string) httputil.BufferPool {
