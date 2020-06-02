@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-const HTTP_CKEY = "kit.http"
+const HTTP_CKEY = "http"
 
 const (
 	ProxyBufferPool_None = "none" // 没有缓存池
@@ -173,13 +173,9 @@ type HttpConfig struct {
 	ProxyErrorHandler string `json:"proxyErrorHandler" yaml:"proxyErrorHandler"`
 }
 
-func init() {
-	var c HttpConfig
-	if cnf, ok := conf.Get(HTTP_CKEY); ok {
-		if err := conf.Convert(cnf, &c); err == nil {
-			_, c.DisableCompressionSet = conf.Elem(cnf, "disableCompression")
-			_, c.ForceAttemptHTTP2Set = conf.Elem(cnf, "forceAttemptHTTP2")
-		}
+func SetupHttp(c *HttpConfig) {
+	if c == nil {
+		c = new(HttpConfig)
 	}
 	if c.ConnectTimeout == 0 {
 		c.ConnectTimeout = 30 * time.Second
@@ -427,4 +423,15 @@ func HttpProxyHandler(rurl string) *httputil.ReverseProxy {
 		BufferPool:   ReverseProxy.BufferPool,
 		ErrorHandler: ReverseProxy.ErrorHandler,
 	}
+}
+
+func init() {
+	var c *HttpConfig
+	if cnf, ok := conf.Get(HTTP_CKEY); ok {
+		if err := conf.Convert(cnf, &c); err == nil {
+			_, c.DisableCompressionSet = conf.Elem(cnf, "disableCompression")
+			_, c.ForceAttemptHTTP2Set = conf.Elem(cnf, "forceAttemptHTTP2")
+		}
+	}
+	SetupHttp(c)
 }

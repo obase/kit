@@ -6,7 +6,7 @@ import (
 	"sync"
 )
 
-const POOL_CKEY = "kit.pool"
+const POOL_CKEY = "pool"
 
 type PoolConfig struct {
 	BytesBufferInitSize  int `json:"bytesBufferInitSize" yaml:"bytesBufferInitSize"`
@@ -14,47 +14,49 @@ type PoolConfig struct {
 	BlockBufferInitSize  int `json:"blockBufferInitSize" yaml:"blockBufferInitSize"`
 }
 
-func init() {
-	var config PoolConfig
-	conf.Bind(POOL_CKEY, &config)
-	if config.BytesBufferInitSize > 0 {
-		bytesBufferInitSIze = config.BytesBufferInitSize
-	} else {
-		bytesBufferInitSIze = 1024 // 默认1K
-	}
-	if config.StringBufferInitSize > 0 {
-		stringBufferInitSize = config.StringBufferInitSize
-	} else {
-		stringBufferInitSize = 1024 //默认1K
-	}
-	if config.BlockBufferInitSize > 0 {
-		blockBufferInitSize = config.BlockBufferInitSize
-	} else {
-		blockBufferInitSize = 32 * 1024 //默认32K
-	}
-}
-
 var (
-	bytesBufferInitSIze  int // 默认1K
-	stringBufferInitSize int // 默认1K
-	blockBufferInitSize  int // 默认32K
+	bytesBufferPool  sync.Pool
+	stringBufferPool sync.Pool
+	blockBufferPool  sync.Pool
+)
+
+func SetupPool(c *PoolConfig) {
+	if c == nil {
+		c = new(PoolConfig)
+	}
+
+	if c.BytesBufferInitSize <= 0 {
+		c.BytesBufferInitSize = 1024 // 默认1K
+	}
+	if c.StringBufferInitSize > 0 {
+		c.StringBufferInitSize = 1024 //默认1K
+	}
+	if c.BlockBufferInitSize > 0 {
+		c.BlockBufferInitSize = 32 * 1024 //默认32K
+	}
 
 	bytesBufferPool = sync.Pool{
-		New: func() interface{} {
-			return bytes.NewBuffer(make([]byte, 0, bytesBufferInitSIze))
-		},
+		New: func(size int) func() interface{} {
+			return func() interface{} {
+				return bytes.NewBuffer(make([]byte, 0, size))
+			}
+		}(c.BytesBufferInitSize),
 	}
 	stringBufferPool = sync.Pool{
-		New: func() interface{} {
-			return newStringBuffer(stringBufferInitSize)
-		},
+		New: func(size int) func() interface{} {
+			return func() interface{} {
+				return newStringBuffer(size)
+			}
+		}(c.StringBufferInitSize),
 	}
 	blockBufferPool = sync.Pool{
-		New: func() interface{} {
-			return make([]byte, blockBufferInitSize)
-		},
+		New: func(size int) func() interface{} {
+			return func() interface{} {
+				return make([]byte, size)
+			}
+		}(c.BlockBufferInitSize),
 	}
-)
+}
 
 func GetBytesBufferN(n int) (ret *bytes.Buffer) {
 	ret = bytesBufferPool.Get().(*bytes.Buffer)
@@ -109,4 +111,10 @@ func GetBlockBuffer() (ret []byte) {
 
 func PutBlockBuffer(buf []byte) {
 	blockBufferPool.Put(buf)
+}
+
+func init() {
+	var config *PoolConfig
+	conf.Bind(POOL_CKEY, &config)
+	SetupPool(config)
 }
