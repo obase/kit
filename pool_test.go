@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-	"unsafe"
 )
 
 const (
@@ -198,44 +197,18 @@ func BenchmarkConcat3(b *testing.B) {
 	}
 }
 
-func BenchmarkConcatBuffer(b *testing.B) {
+func BenchmarkConcatSprintf(b *testing.B) {
 	var result string
-	buf := new(bytes.Buffer)
 	for n := 0; n < b.N; n++ {
 		var str string
 		for i := 0; i < cnt; i++ {
-			buf.Reset()
-			buf.WriteString(sss)
-			buf.WriteString(sss)
-			buf.WriteString(strconv.Itoa(i))
-			str = buf.String()
+			str = fmt.Sprintf("%s%s%d", sss, sss, i)
 		}
 		result = str
 	}
 	b.StopTimer()
-	if result != expected {
-		//b.Errorf("unexpected result; got=%s, want=%s", string(result), expected)
-	}
-}
-
-func BenchmarkConcatBuilder(b *testing.B) {
-	var result string
-	buf := new(strings.Builder)
-	for n := 0; n < b.N; n++ {
-		var str string
-		for i := 0; i < cnt; i++ {
-			buf.Reset()
-			buf.WriteString(sss)
-			buf.WriteString(sss)
-			buf.WriteString(strconv.Itoa(i))
-			str = buf.String()
-		}
-		result = str
-	}
-	b.StopTimer()
-	if result != expected {
-		//b.Errorf("unexpected result; got=%s, want=%s", string(result), expected)
-	}
+	_ = result
+	//fmt.Println(result)
 }
 
 func BenchmarkConcatOperator(b *testing.B) {
@@ -251,30 +224,22 @@ func BenchmarkConcatOperator(b *testing.B) {
 	_ = result
 	//fmt.Println(result)
 }
-
-func BenchmarkConcatCopy(b *testing.B) {
+func BenchmarkConcatStringBuffer(b *testing.B) {
 	var result string
-	var bs []byte //= make([]byte, 1024)
 	for n := 0; n < b.N; n++ {
 		var str string
 		for i := 0; i < cnt; i++ {
-			bs = bs[:0]
-			bs = append(bs, sss...)
-			bs = append(bs, sss...)
-			bs = append(bs, strconv.Itoa(i)...)
-			str = *(*string)(unsafe.Pointer(&bs))
+			buf := GetStringBuffer()
+			buf.WriteString(sss)
+			buf.WriteString(sss)
+			buf.WriteString(strconv.Itoa(i))
+			str = buf.UnsafeString()
+			PutStringBuffer(buf)
 		}
 		result = str
 	}
 	b.StopTimer()
 	_ = result
 	//fmt.Println(result)
-}
 
-func TestLocalBytes_String(t *testing.T) {
-	var ls StringBuilder
-	ls = append(ls, "this is a"...)
-	ls = append(ls, " another..."...)
-	fmt.Println(ls.String())
-	fmt.Println(ls.String() == "this is a another...")
 }

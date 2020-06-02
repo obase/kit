@@ -14,6 +14,8 @@ import (
 	"time"
 )
 
+const HTTP_CKEY = "kit.http"
+
 const (
 	ProxyBufferPool_None = "none" // 没有缓存池
 	ProxyBufferPool_Sync = "sync" // 采用sync.Pool
@@ -25,32 +27,6 @@ const (
 	REVERSE_HOST   = "x-rhost"
 	REVERSE_PATH   = "x-rpath"
 )
-
-var (
-	DefaultHttpTransport      *http.Transport
-	DefaultHttpClient         *http.Client
-	DefaultReverseProxy       *httputil.ReverseProxy
-	defaultProxyFlushInterval time.Duration
-)
-
-type HttpJsonError string
-
-func (h HttpJsonError) Error() string {
-	return string(h)
-}
-
-const HTTP_CKEY = "kitset.http"
-
-func init() {
-	var config *HttpConfig
-	if cnf, ok := conf.Get(HTTP_CKEY); ok {
-		if err := conf.Convert(cnf, &config); err == nil {
-			_, config.DisableCompressionSet = conf.Elem(cnf, "disableCompression")
-			_, config.ForceAttemptHTTP2Set = conf.Elem(cnf, "forceAttemptHTTP2")
-		}
-	}
-	SetupHttp(config)
-}
 
 type HttpConfig struct {
 	// Timeout is the maximum amount of time a dial will wait for
@@ -196,25 +172,14 @@ type HttpConfig struct {
 	ProxyErrorHandler string `json:"proxyErrorHandler" yaml:"proxyErrorHandler"`
 }
 
-func mergeHttpConfig(c *HttpConfig) *HttpConfig {
-	if c == nil {
-		c = new(HttpConfig)
-	}
-	/*
-		var DefaultTransport RoundTripper = &Transport{
-			Proxy: ProxyFromEnvironment,
-			DialContext: (&net.Dialer{
-				Timeout:   30 * time.Second,
-				KeepAlive: 30 * time.Second,
-				DualStack: true,
-			}).DialContext,
-			ForceAttemptHTTP2:     true,
-			MaxIdleConns:          100,
-			IdleConnTimeout:       90 * time.Second,
-			TLSHandshakeTimeout:   10 * time.Second,
-			ExpectContinueTimeout: 1 * time.Second,
+func init() {
+	var c HttpConfig
+	if cnf, ok := conf.Get(HTTP_CKEY); ok {
+		if err := conf.Convert(cnf, &c); err == nil {
+			_, c.DisableCompressionSet = conf.Elem(cnf, "disableCompression")
+			_, c.ForceAttemptHTTP2Set = conf.Elem(cnf, "forceAttemptHTTP2")
 		}
-	*/
+	}
 	if c.ConnectTimeout == 0 {
 		c.ConnectTimeout = 30 * time.Second
 	}
@@ -237,62 +202,74 @@ func mergeHttpConfig(c *HttpConfig) *HttpConfig {
 	if c.ProxyErrorHandler == "" {
 		c.ProxyErrorHandler = ProxyErrorHandler_Body
 	}
-	return c
-}
-
-func SetupHttp(hc *HttpConfig) {
-	defaultConfig := mergeHttpConfig(hc)
-	defaultProxyFlushInterval = defaultConfig.ProxyFlushInterval
-	DefaultHttpTransport = &http.Transport{
+	ProxyFlushInterval = c.ProxyFlushInterval
+	HttpTransport = &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
 		DialContext: (&net.Dialer{
-			Timeout:   defaultConfig.ConnectTimeout,
-			KeepAlive: defaultConfig.KeepAlive,
+			Timeout:   c.ConnectTimeout,
+			KeepAlive: c.KeepAlive,
 		}).DialContext,
-		ForceAttemptHTTP2:      IfBool(defaultConfig.ForceAttemptHTTP2Set || defaultConfig.ForceAttemptHTTP2, defaultConfig.ForceAttemptHTTP2, true),
-		MaxIdleConns:           defaultConfig.MaxIdleConns,
-		MaxIdleConnsPerHost:    defaultConfig.MaxIdleConnsPerHost,
-		MaxConnsPerHost:        defaultConfig.MaxConnsPerHost,
-		IdleConnTimeout:        defaultConfig.IdleConnTimeout,
-		TLSHandshakeTimeout:    defaultConfig.TLSHandshakeTimeout,
-		DisableCompression:     IfBool(defaultConfig.DisableCompressionSet || defaultConfig.DisableCompression, defaultConfig.DisableCompression, false),
-		ResponseHeaderTimeout:  defaultConfig.ResponseHeaderTimeout,
-		ExpectContinueTimeout:  defaultConfig.ExpectContinueTimeout,
-		MaxResponseHeaderBytes: defaultConfig.MaxResponseHeaderBytes,
-		WriteBufferSize:        defaultConfig.WriteBufferSize,
-		ReadBufferSize:         defaultConfig.ReadBufferSize,
+		ForceAttemptHTTP2:      IfBool(c.ForceAttemptHTTP2Set || c.ForceAttemptHTTP2, c.ForceAttemptHTTP2, true),
+		MaxIdleConns:           c.MaxIdleConns,
+		MaxIdleConnsPerHost:    c.MaxIdleConnsPerHost,
+		MaxConnsPerHost:        c.MaxConnsPerHost,
+		IdleConnTimeout:        c.IdleConnTimeout,
+		TLSHandshakeTimeout:    c.TLSHandshakeTimeout,
+		DisableCompression:     IfBool(c.DisableCompressionSet || c.DisableCompression, c.DisableCompression, false),
+		ResponseHeaderTimeout:  c.ResponseHeaderTimeout,
+		ExpectContinueTimeout:  c.ExpectContinueTimeout,
+		MaxResponseHeaderBytes: c.MaxResponseHeaderBytes,
+		WriteBufferSize:        c.WriteBufferSize,
+		ReadBufferSize:         c.ReadBufferSize,
 	}
-	DefaultHttpClient = &http.Client{
-		Transport: DefaultHttpTransport,
-		Timeout:   defaultConfig.RequestTimeout,
+	HttpClient = &http.Client{
+		Transport: HttpTransport,
+		Timeout:   c.RequestTimeout,
 	}
 
-	DefaultReverseProxy = &httputil.ReverseProxy{
-		Transport:     DefaultHttpTransport,
-		FlushInterval: defaultConfig.ProxyFlushInterval,
+	ReverseProxy = &httputil.ReverseProxy{
+		Transport:     HttpTransport,
+		FlushInterval: c.ProxyFlushInterval,
 		Director: func(req *http.Request) {
 			req.URL.Scheme = req.Header.Get(REVERSE_SCHEME)
 			req.URL.Host = req.Header.Get(REVERSE_HOST)
 			req.URL.Path = req.Header.Get(REVERSE_PATH)
 			if _, ok := req.Header["User-Agent"]; !ok {
-				// explicitly disable User-Agent so it's not set to default value
+				// explicitly disable User-Agent so it's not set to  value
 				req.Header.Set("User-Agent", "")
 			}
 		},
-		BufferPool:   proxyBufferPool(defaultConfig.ProxyBufferPool),
-		ErrorHandler: proxyErrorHandler(defaultConfig.ProxyErrorHandler),
+		BufferPool:   proxyBufferPool(c.ProxyBufferPool),
+		ErrorHandler: proxyErrorHandler(c.ProxyErrorHandler),
 	}
 }
 
+var (
+	HttpTransport      *http.Transport
+	HttpClient         *http.Client
+	ReverseProxy       *httputil.ReverseProxy
+	ProxyFlushInterval time.Duration
+)
+
+type HttpError string
+
+func (h HttpError) Error() string {
+	return string(h)
+}
+
 type httpBufferPool struct {
-	Proxy *sync.Pool
+	*sync.Pool
 }
 
 func (s *httpBufferPool) Get() []byte {
-	return s.Proxy.Get().([]byte)
+	ret := s.Pool.Get().([]byte)
+	if len(ret) == 0 {
+		ret = ret[:cap(ret)] // httpBufferPool的bytes长度必须大于,否则会抛panic
+	}
+	return ret
 }
 func (s *httpBufferPool) Put(v []byte) {
-	s.Proxy.Put(v)
+	s.Pool.Put(v)
 }
 
 func proxyBufferPool(name string) httputil.BufferPool {
@@ -300,7 +277,7 @@ func proxyBufferPool(name string) httputil.BufferPool {
 	case ProxyBufferPool_None:
 		return nil
 	case ProxyBufferPool_Sync:
-		return &httpBufferPool{Proxy: &defaultBytesPool}
+		return &httpBufferPool{Pool: &blockBufferPool}
 	}
 	panic("invalid proxy buffer pool type: " + name)
 }
@@ -320,7 +297,7 @@ func proxyErrorHandler(name string) func(w http.ResponseWriter, r *http.Request,
 
 func JoinQuery(rurl string, params map[string]string) string {
 	if len(params) > 0 {
-		buf := BorrowBuffer()
+		buf := GetBytesBuffer()
 		buf.WriteString(rurl)
 		first := true
 		for k, v := range params {
@@ -335,7 +312,7 @@ func JoinQuery(rurl string, params map[string]string) string {
 			buf.WriteString(url.QueryEscape(v))
 		}
 		rurl = buf.String()
-		ReturnBuffer(buf)
+		PutBytesBuffer(buf)
 	}
 	return rurl
 }
@@ -351,20 +328,20 @@ func HttpRawRequest(method string, url string, header map[string]string, body io
 	for k, v := range header {
 		req.Header.Set(k, v)
 	}
-	rsp, err := DefaultHttpClient.Do(req)
+	rsp, err := HttpClient.Do(req)
 	if err != nil {
 		return
 	}
 	defer rsp.Body.Close()
 
 	state = rsp.StatusCode
-	buf := BorrowBuffer()
-	bss := BorrowBytes()
+	buf := GetBytesBuffer()
+	bss := GetBlockBuffer()
 	if _, err = io.CopyBuffer(buf, rsp.Body, bss); err == nil {
 		content = buf.String()
 	}
-	ReturnBytes(bss)
-	ReturnBuffer(buf)
+	PutBlockBuffer(bss)
+	PutBytesBuffer(buf)
 	return
 }
 
@@ -379,20 +356,20 @@ func HttpRequest(method string, url string, header map[string]string, body io.Re
 	for k, v := range header {
 		req.Header.Set(k, v)
 	}
-	rsp, err := DefaultHttpClient.Do(req)
+	rsp, err := HttpClient.Do(req)
 	if err != nil {
 		return
 	}
 	defer rsp.Body.Close()
 
-	state = rsp.StatusCode
-	buf := BorrowBuffer()
-	bss := BorrowBytes()
-	if _, err = io.CopyBuffer(buf, rsp.Body, bss); err == nil {
-		content = buf.String()
-	}
-	ReturnBytes(bss)
-	ReturnBuffer(buf)
+	//state = rsp.StatusCode
+	//buf := BorrowBuffer()
+	//bss := BorrowBlock32()
+	//if _, err = io.CopyBuffer(buf, rsp.Body, bss); err == nil {
+	//	content = buf.String()
+	//}
+	//ReturnBlock32(bss)
+	//ReturnBuffer(buf)
 	return
 }
 
@@ -411,7 +388,7 @@ func HttpJson(method string, url string, header map[string]string, reqobj interf
 		return
 	}
 	if status < 200 || status > 299 {
-		err = HttpJsonError(content)
+		err = HttpError(content)
 	} else {
 		err = json.Unmarshal([]byte(content), &rspobj)
 	}
@@ -424,7 +401,7 @@ func HttpProxy(rurl string, writer http.ResponseWriter, request *http.Request) (
 		request.Header.Set(REVERSE_SCHEME, purl.Scheme)
 		request.Header.Set(REVERSE_HOST, purl.Host)
 		request.Header.Set(REVERSE_PATH, purl.Path)
-		DefaultReverseProxy.ServeHTTP(writer, request)
+		ReverseProxy.ServeHTTP(writer, request)
 	} else {
 		writer.WriteHeader(http.StatusBadGateway)
 		writer.Write([]byte(err.Error()))
@@ -435,8 +412,8 @@ func HttpProxy(rurl string, writer http.ResponseWriter, request *http.Request) (
 func HttpProxyHandler(rurl string) *httputil.ReverseProxy {
 	purl, _ := url.Parse(rurl)
 	return &httputil.ReverseProxy{
-		Transport:     DefaultHttpTransport,
-		FlushInterval: defaultProxyFlushInterval,
+		Transport:     HttpTransport,
+		FlushInterval: ProxyFlushInterval,
 		Director: func(req *http.Request) {
 			req.URL.Scheme = purl.Scheme
 			req.URL.Host = purl.Host
@@ -446,7 +423,7 @@ func HttpProxyHandler(rurl string) *httputil.ReverseProxy {
 				req.Header.Set("User-Agent", "")
 			}
 		},
-		BufferPool:   DefaultReverseProxy.BufferPool,
-		ErrorHandler: DefaultReverseProxy.ErrorHandler,
+		BufferPool:   ReverseProxy.BufferPool,
+		ErrorHandler: ReverseProxy.ErrorHandler,
 	}
 }
