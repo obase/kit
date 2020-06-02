@@ -12,11 +12,11 @@ func TestNewStringBuffer(t *testing.T) {
 	ls.WriteString("this is a")
 	ls.WriteString(" another...")
 	ls.Write([]byte(" and testign..."))
-	var str1 string = ls.Intern()
+	var str1 string = ls.UnsafeString()
 	fmt.Println(str1)
 	ls.buf[0] = 'A'
 	io.Copy(ls, strings.NewReader("this is a test"))
-	var str2 string = ls.Intern()
+	var str2 string = ls.UnsafeString()
 
 	fmt.Println(str1)
 	fmt.Println(str2)
