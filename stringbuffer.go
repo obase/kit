@@ -35,13 +35,23 @@ func (sb *StringBuffer) Cap() int { return sb.cap }
 func (sb *StringBuffer) Reset() {
 	sb.len = 0
 }
+func (sb *StringBuffer) Grow(n int) {
+	sb.cap += n
+	buf := make([]byte, sb.cap)
+	if sb.len > 0 {
+		copy(buf, sb.buf)
+	}
+	sb.buf = buf
+}
 func (sb *StringBuffer) Write(p []byte) (int, error) {
 	pln := len(p)
 	sln := sb.len
 	sb.len += pln
 	if sb.len > sb.cap {
 		buf := make([]byte, sb.len)
-		copy(buf, sb.buf)
+		if sln > 0 {
+			copy(buf, sb.buf)
+		}
 		sb.buf = buf
 		sb.cap = sb.len
 	}
@@ -53,7 +63,9 @@ func (sb *StringBuffer) WriteByte(c byte) error {
 	sb.len++
 	if sb.len > sb.cap {
 		buf := make([]byte, sb.len)
-		copy(buf, sb.buf)
+		if sln > 0 {
+			copy(buf, sb.buf)
+		}
 		sb.buf = buf
 		sb.cap = sb.len
 	}
@@ -67,7 +79,9 @@ func (sb *StringBuffer) WriteString(p string) (int, error) {
 	sb.len += pln
 	if sb.len > sb.cap {
 		buf := make([]byte, sb.len)
-		copy(buf, sb.buf)
+		if sln > 0 {
+			copy(buf, sb.buf)
+		}
 		sb.buf = buf
 		sb.cap = sb.len
 	}

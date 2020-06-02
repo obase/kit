@@ -56,6 +56,15 @@ var (
 	}
 )
 
+func GetBytesBufferN(n int) (ret *bytes.Buffer) {
+	ret = bytesBufferPool.Get().(*bytes.Buffer)
+	ret.Reset() // 需要重置
+	if n -= ret.Cap(); n > 0 {
+		ret.Grow(n)
+	}
+	return
+}
+
 func GetBytesBuffer() (ret *bytes.Buffer) {
 	ret = bytesBufferPool.Get().(*bytes.Buffer)
 	ret.Reset() // 需要重置
@@ -66,6 +75,15 @@ func PutBytesBuffer(buf *bytes.Buffer) {
 	bytesBufferPool.Put(buf)
 }
 
+func GetStringBufferN(n int) (ret *StringBuffer) {
+	ret = stringBufferPool.Get().(*StringBuffer)
+	ret.Reset()
+	if n -= ret.Cap(); n > 0 {
+		ret.Grow(n)
+	}
+	return
+}
+
 func GetStringBuffer() (ret *StringBuffer) {
 	ret = stringBufferPool.Get().(*StringBuffer)
 	ret.Reset()
@@ -74,6 +92,14 @@ func GetStringBuffer() (ret *StringBuffer) {
 
 func PutStringBuffer(buf *StringBuffer) {
 	stringBufferPool.Put(buf)
+}
+
+func GetBlockBufferN(n int) (ret []byte) {
+	ret = blockBufferPool.Get().([]byte)
+	if n-len(ret) > 0 {
+		ret = make([]byte, n)
+	}
+	return
 }
 
 func GetBlockBuffer() (ret []byte) {

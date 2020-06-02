@@ -27,6 +27,7 @@ const (
 	REVERSE_HOST   = "x-rhost"
 	REVERSE_PATH   = "x-rpath"
 )
+const HTTP_BLOCK_SIZE = 32 * 1024
 
 type HttpConfig struct {
 	// Timeout is the maximum amount of time a dial will wait for
@@ -335,8 +336,8 @@ func HttpRawRequest(method string, url string, header map[string]string, body io
 	defer rsp.Body.Close()
 
 	state = rsp.StatusCode
-	buf := GetBytesBuffer()
-	bss := GetBlockBuffer()
+	buf := GetBytesBufferN(HTTP_BLOCK_SIZE)
+	bss := GetBlockBufferN(HTTP_BLOCK_SIZE)
 	if _, err = io.CopyBuffer(buf, rsp.Body, bss); err == nil {
 		content = buf.String()
 	}
@@ -362,14 +363,14 @@ func HttpRequest(method string, url string, header map[string]string, body io.Re
 	}
 	defer rsp.Body.Close()
 
-	//state = rsp.StatusCode
-	//buf := BorrowBuffer()
-	//bss := BorrowBlock32()
-	//if _, err = io.CopyBuffer(buf, rsp.Body, bss); err == nil {
-	//	content = buf.String()
-	//}
-	//ReturnBlock32(bss)
-	//ReturnBuffer(buf)
+	state = rsp.StatusCode
+	buf := GetBytesBufferN(HTTP_BLOCK_SIZE)
+	bss := GetBlockBufferN(HTTP_BLOCK_SIZE)
+	if _, err = io.CopyBuffer(buf, rsp.Body, bss); err == nil {
+		content = buf.String()
+	}
+	PutBlockBuffer(bss)
+	PutBytesBuffer(buf)
 	return
 }
 
